@@ -5,7 +5,7 @@ A production-grade, stateful multi-agent orchestrator designed to parse scattere
 The platform features an active cloud-native architecture that processes text data dynamically via an end-to-end RAG pipeline, fallbacks gracefully to live REST APIs, and streams millisecond-level telemetry metrics directly to a reactive user interface.
 
 ### 🔗 System Deployment Fingerprints
-* **Live Application URL:** https://streamlit.app
+* **Live Application URL:** https://dev-telemetry-retrieval-agent-rt9yrg8csoappjsyhqi5l4i.streamlit.app/
 * **Core Technical Stack:** Python, LangGraph, Google Gemini (`gemini-2.5-flash`), Qdrant Cloud (Vector DB), Streamlit UI, GitHub REST API, TOML, Git.
 
 ---
