@@ -1,0 +1,7 @@
+langgraph
+langchain-core
+langchain-google-genai
+langchain-text-splitters
+qdrant-client
+requests
+pydantic
