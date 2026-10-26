@@ -282,4 +282,143 @@ def doc_qa_node(state: AgentState) -> dict:
     return {"retrieved_docs": docs}
 
 
-Use code with caution.def issue_search_node(state: AgentState) -> dict:raw_query = state.get("current_query") or _last_user_text(state)diagnostics_list = state.get("diagnostics") or []# Traceback Multi-Line Pre-Parsing Filterlines = [line.strip() for line in raw_query.split("\n") if line.strip()]if len(lines) > 1 and any(kw in raw_query.lower() for kw in ["traceback", "exception", "unexpectedresponse", "typeerror"]):target_term = lines[-1]if ":" in target_term:target_term = target_term.split(":")[-1].strip()else:target_term = raw_queryquery = _sanitize_github_query(target_term)if not query:return {"retrieved_issues": [], "diagnostics": diagnostics_list + ["Empty GitHub search parameter."]}headers = {"Accept": "application/vnd.github+json"}token = os.environ.get("GITHUB_TOKEN")if token and token.strip():headers["Authorization"] = f"token {token.strip()}"# Execution Phase 1: Localized Framework Scoped Scanparams = {"q": f"{query} repo:{GITHUB_REPO} is:issue","sort": "updated","order": "desc","per_page": MAX_ISSUES,}try:LOGGER.info("GitHub API Node Initiated Scoped Request: %s", params["q"])response = requests.get(GITHUB_SEARCH_URL, headers=headers, params=params, timeout=HTTP_TIMEOUT)# Execution Phase 2: Global Ecosystem Fallback Scan (Triggered if Scoped Scan returns 0 hits or 422 errors)if response.status_code == 422 or (response.status_code == 200 and not response.json().get("items", [])):LOGGER.info("Scoped search returned zero hits. Falling back to global ecosystem issue scan.")params["q"] = f"{query} is:issue"response = requests.get(GITHUB_SEARCH_URL, headers=headers, params=params, timeout=HTTP_TIMEOUT)response.raise_for_status()payload = response.json()except requests.exceptions.RequestException as exc:LOGGER.error("GitHub REST bridge transport crash: %s", exc)return {"retrieved_issues": [],"diagnostics": diagnostics_list + [f"GitHub Endpoint Transport Crash: {str(exc)}"],}issues = []for item in payload.get("items", [])[:MAX_ISSUES]:issues.append({"title": item.get("title", "Untitled Case Node"),"url": item.get("html_url", ""),"number": item.get("number"),"state": item.get("state", "open"),})LOGGER.info("issue_search node output compiled. Extracted %s matching cases.", len(issues))return {"retrieved_issues": issues, "diagnostics": diagnostics_list}def synthesize_node(state: AgentState) -> dict:context_blocks: list[str] = []if state.get("retrieved_docs"):rendered = "\n".join(f"{d['section']}: {d['text']}"for d in state["retrieved_docs"])context_blocks.append("Documentation Context:\n" + rendered)if state.get("retrieved_issues"):rendered = "\n".join(f"Issue #{i['number']} [{i['state']}]: {i['title']} ({i['url']})"for i in state["retrieved_issues"])context_blocks.append("GitHub Issue Context:\n" + rendered)if not context_blocks:diagnostics = state.get("diagnostics") or []detail = f" (diagnostics: {'; '.join(diagnostics)})" if diagnostics else ""LOGGER.info("synthesize: no context available%s", detail)return {"final_answer": ("I could not retrieve any supporting context for that question, so I ""would rather not guess. Check that the Qdrant collection is hydrated ""and that the GitHub search succeeded." + detail)}system_prompt = ("You are an expert developer assistant. Answer the user's prompt using only ""the provided context. Strict rule: cite your sources inline using standard ""markdown links matching the documentation URLs or issue numbers. If the ""context does not cover the question, say so plainly.")context = "\n\n".join(context_blocks)try:answer = get_chat_model(0.2).invoke([{"role": "system", "content": system_prompt},{"role": "user","content": f"Context:\n{context}\n\nQuestion: {state.get('current_query', '')}",},]).contentexcept Exception as exc:LOGGER.error("Synthesis failed (%s: %s)", type(exc).name, exc)return {"final_answer": f"Synthesis failed: {type(exc).name}: {exc}","diagnostics": (state.get("diagnostics") or []) + [str(exc)],}return {"final_answer": answer}def clarify_node(state: AgentState) -> dict:return {"final_answer": ("Could you please provide more context or add the specific error ""signature you are running into?")}def route_decision(state: AgentState) -> str:return state.get("route_to", "doc_qa")---------------------------------------------------------------------------Graph assembly---------------------------------------------------------------------------graph = StateGraph(AgentState)graph.add_node("router", router_node)graph.add_node("doc_qa", doc_qa_node)graph.add_node("issue_search", issue_search_node)graph.add_node("synthesize", synthesize_node)graph.add_node("clarify", clarify_node)graph.add_edge(START, "router")graph.add_conditional_edges("router",route_decision,{"doc_qa": "doc_qa", "issue_search": "issue_search", "clarify": "clarify"},)graph.add_edge("doc_qa", "synthesize")graph.add_edge("issue_search", "synthesize")graph.add_edge("synthesize", END)graph.add_edge("clarify", END)checkpointer = MemorySaver()app = graph.compile(checkpointer=checkpointer)if name == "main":import uuid as _uuidfrom langchain_core.messages import HumanMessageprobe = "MemorySaver checkpointer thread_id duplicate keys error"cfg = {"configurable": {"thread_id": str(_uuid.uuid4())}}result = app.invoke({"messages": [HumanMessage(content=probe)]}, cfg)print("ROUTE:", result.get("route_to"))print("DOCS:", len(result.get("retrieved_docs") or []))print("ISSUES:", len(result.get("retrieved_issues") or []))print("DIAGNOSTICS:", result.get("diagnostics"))print("ANSWER:\n", result.get("final_answer"))
+def issue_search_node(state: AgentState) -> dict:
+raw_query = state.get("current_query") or _last_user_text(state)
+diagnostics_list = state.get("diagnostics") or []
+lines = [line.strip() for line in raw_query.split("\n") if line.strip()]
+if len(lines) > 1 and any(kw in raw_query.lower() for kw in ["traceback", "exception", "unexpectedresponse", "typeerror"]):
+target_term = lines[-1]
+if ":" in target_term:
+target_term = target_term.split(":")[-1].strip()
+else:
+target_term = raw_query
+query = _sanitize_github_query(target_term)
+if not query:
+return {"retrieved_issues": [], "diagnostics": diagnostics_list + ["Empty GitHub search parameter."]}
+headers = {"Accept": "application/vnd.github+json"}
+token = os.environ.get("GITHUB_TOKEN")
+if token and token.strip():
+headers["Authorization"] = f"token {token.strip()}"
+params = {
+"q": f"{query} repo:{GITHUB_REPO} is:issue",
+"sort": "updated",
+"order": "desc",
+"per_page": MAX_ISSUES,
+}
+try:
+LOGGER.info("GitHub API Node Initiated Scoped Request: %s", params["q"])
+response = requests.get(GITHUB_SEARCH_URL, headers=headers, params=params, timeout=HTTP_TIMEOUT)
+if response.status_code == 422 or (response.status_code == 200 and not response.json().get("items", [])):
+LOGGER.info("Scoped search returned zero hits. Falling back to global ecosystem issue scan.")
+params["q"] = f"{query} is:issue"
+response = requests.get(GITHUB_SEARCH_URL, headers=headers, params=params, timeout=HTTP_TIMEOUT)
+response.raise_for_status()
+payload = response.json()
+except requests.exceptions.RequestException as exc:
+LOGGER.error("GitHub REST bridge transport crash: %s", exc)
+return {
+"retrieved_issues": [],
+"diagnostics": diagnostics_list + [f"GitHub Endpoint Transport Crash: {str(exc)}"],
+}
+issues = []
+for item in payload.get("items", [])[:MAX_ISSUES]:
+issues.append({
+"title": item.get("title", "Untitled Case Node"),
+"url": item.get("html_url", ""),
+"number": item.get("number"),
+"state": item.get("state", "open"),
+})
+LOGGER.info("issue_search node output compiled. Extracted %s matching cases.", len(issues))
+return {"retrieved_issues": issues, "diagnostics": diagnostics_list}
+def synthesize_node(state: AgentState) -> dict:
+context_blocks: list[str] = []
+if state.get("retrieved_docs"):
+rendered = "\n".join(
+f"{d['section']}: {d['text']}"
+for d in state["retrieved_docs"]
+)
+context_blocks.append("Documentation Context:\n" + rendered)
+if state.get("retrieved_issues"):
+rendered = "\n".join(
+f"Issue #{i['number']} [{i['state']}]: {i['title']} ({i['url']})"
+for i in state["retrieved_issues"]
+)
+context_blocks.append("GitHub Issue Context:\n" + rendered)
+if not context_blocks:
+diagnostics = state.get("diagnostics") or []
+detail = f" (diagnostics: {'; '.join(diagnostics)})" if diagnostics else ""
+LOGGER.info("synthesize: no context available%s", detail)
+return {
+"final_answer": (
+"I could not retrieve any supporting context for that question, so I "
+"would rather not guess. Check that the Qdrant collection is hydrated "
+"and that the GitHub search succeeded." + detail
+)
+}
+system_prompt = (
+"You are an expert developer assistant. Answer the user's prompt using only "
+"the provided context. Strict rule: cite your sources inline using standard "
+"markdown links matching the documentation URLs or issue numbers. If the "
+"context does not cover the question, say so plainly."
+)
+context = "\n\n".join(context_blocks)
+try:
+answer = get_chat_model(0.2).invoke([
+{"role": "system", "content": system_prompt},
+{
+"role": "user",
+"content": f"Context:\n{context}\n\nQuestion: {state.get('current_query', '')}",
+},
+]).content
+except Exception as exc:
+LOGGER.error("Synthesis failed (%s: %s)", type(exc).name, exc)
+return {
+"final_answer": f"Synthesis failed: {type(exc).name}: {exc}",
+"diagnostics": (state.get("diagnostics") or []) + [str(exc)],
+}
+return {"final_answer": answer}
+def clarify_node(state: AgentState) -> dict:
+return {
+"final_answer": (
+"Could you please provide more context or add the specific error "
+"signature you are running into?"
+)
+}
+def route_decision(state: AgentState) -> str:
+return state.get("route_to", "doc_qa")
+
+---------------------------------------------------------------------------
+
+
+Graph assembly
+
+
+---------------------------------------------------------------------------
+
+graph = StateGraph(AgentState)
+graph.add_node("router", router_node)
+graph.add_node("doc_qa", doc_qa_node)
+graph.add_node("issue_search", issue_search_node)
+graph.add_node("synthesize", synthesize_node)
+graph.add_node("clarify", clarify_node)
+graph.add_edge(START, "router")
+graph.add_conditional_edges(
+"router",
+route_decision,
+{"doc_qa": "doc_qa", "issue_search": "issue_search", "clarify": "clarify"},
+)
+graph.add_edge("doc_qa", "synthesize")
+graph.add_edge("issue_search", "synthesize")
+graph.add_edge("synthesize", END)
+graph.add_edge("clarify", END)
+checkpointer = MemorySaver()
+app = graph.compile(checkpointer=checkpointer)
+
+---
+
+### 🚀 Push to GitHub to Auto-Refresh
+Once you save the file, push it to your terminal to trigger the automated cloud container rebuild:
+```cmd
+git add engine.py
+git commit -m "Resolve complete engine graph node script compilation"
+git push origin main
