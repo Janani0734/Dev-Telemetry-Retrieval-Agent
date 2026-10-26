@@ -283,6 +283,7 @@ def doc_qa_node(state: AgentState) -> dict:
 
 
 def issue_search_node(state: AgentState) -> dict:
+Use code with caution.
 raw_query = state.get("current_query") or _last_user_text(state)
 diagnostics_list = state.get("diagnostics") or []
 lines = [line.strip() for line in raw_query.split("\n") if line.strip()]
@@ -416,9 +417,11 @@ app = graph.compile(checkpointer=checkpointer)
 
 ---
 
-### 🚀 Push to GitHub to Auto-Refresh
-Once you save the file, push it to your terminal to trigger the automated cloud container rebuild:
+### 🚀 Push to GitHub to Auto-Deploy
+
+Save your code changes, and push them to your command prompt terminal to kick off the automated container refresh sequence:
+
 ```cmd
 git add engine.py
-git commit -m "Resolve complete engine graph node script compilation"
+git commit -m "Fix syntax alignment and indentation tracking loops"
 git push origin main
